@@ -19,7 +19,7 @@ load_dotenv()
 class CaptureConfig:
     """Settings for the capture module."""
     
-    capture_hotkey: str = "ctrl+shift+s"
+    capture_hotkey: str = "ctrl+shift+m"
     stop_hotkey: str = "ctrl+shift+q"
     screenshot_format: str = "png"
     screenshot_quality: int = 95

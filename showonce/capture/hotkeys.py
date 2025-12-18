@@ -21,7 +21,7 @@ class HotkeyListener:
 
     def parse_hotkey(self, hotkey_str: str) -> List[Union[keyboard.Key, keyboard.KeyCode]]:
         """
-        Parse hotkey string like 'ctrl+shift+s' into components.
+        Parse hotkey string like 'ctrl+shift+m' into components.
         
         Returns:
             List of keys that make up the hotkey.
@@ -63,7 +63,7 @@ class HotkeyListener:
         Register a hotkey with its callback.
         
         Args:
-            hotkey: String representation (e.g., "<ctrl>+<shift>+s")
+            hotkey: String representation (e.g., "<ctrl>+<shift>+m")
             callback: Function to call when hotkey is triggered.
         """
         with self._lock:

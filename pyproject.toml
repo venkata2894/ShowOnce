@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "showonce"
+version = "1.0.0"
+authors = [
+  { name="Venkata Sai", email="venkata@example.com" },
+]
+description = "AI-powered automation tool that learns workflows from screenshots"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Testing",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+]
+dependencies = [
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.0.0",
+    "click>=8.1.0",
+    "Pillow>=10.0.0",
+    "anthropic>=0.18.0",
+    "playwright>=1.40.0",
+    "rich>=13.0.0",
+]
+
+[project.scripts]
+showonce = "showonce.cli:cli"
+
+[project.urls]
+"Homepage" = "https://github.com/venkata2894/ShowOnce"
+"Bug Tracker" = "https://github.com/venkata2894/ShowOnce/issues"

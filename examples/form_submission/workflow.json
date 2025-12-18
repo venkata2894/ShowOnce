@@ -1,0 +1,98 @@
+{
+    "workflow_name": "form_submission",
+    "total_transitions": 5,
+    "analyzed_at": "2024-12-18T13:10:00",
+    "parameters": [
+        {
+            "name": "full_name",
+            "description": "User's full name"
+        },
+        {
+            "name": "user_email",
+            "description": "User's email address"
+        }
+    ],
+    "actions": [
+        {
+            "action_type": "navigate",
+            "sequence": 1,
+            "url": "https://example.com/forms/contact",
+            "description": "Go to contact form"
+        },
+        {
+            "action_type": "type",
+            "sequence": 2,
+            "target": {
+                "description": "Name field",
+                "selectors": [
+                    {
+                        "strategy": "css",
+                        "value": "#name"
+                    }
+                ]
+            },
+            "is_variable": true,
+            "variable_name": "full_name",
+            "description": "Input full name"
+        },
+        {
+            "action_type": "type",
+            "sequence": 3,
+            "target": {
+                "description": "Email field",
+                "selectors": [
+                    {
+                        "strategy": "css",
+                        "value": "#email"
+                    }
+                ]
+            },
+            "is_variable": true,
+            "variable_name": "user_email",
+            "description": "Input email address"
+        },
+        {
+            "action_type": "select",
+            "sequence": 4,
+            "target": {
+                "description": "Department dropdown",
+                "selectors": [
+                    {
+                        "strategy": "css",
+                        "value": "#dept"
+                    }
+                ]
+            },
+            "value": "Sales",
+            "description": "Select Sales department"
+        },
+        {
+            "action_type": "check",
+            "sequence": 5,
+            "target": {
+                "description": "Newsletter checkbox",
+                "selectors": [
+                    {
+                        "strategy": "css",
+                        "value": "#newsletter"
+                    }
+                ]
+            },
+            "description": "Subscribe to newsletter"
+        },
+        {
+            "action_type": "click",
+            "sequence": 6,
+            "target": {
+                "description": "Submit button",
+                "selectors": [
+                    {
+                        "strategy": "css",
+                        "value": "button[type='submit']"
+                    }
+                ]
+            },
+            "description": "Submit the form"
+        }
+    ]
+}

@@ -68,6 +68,15 @@ class WorkflowStep(BaseModel):
         # Clear base64 to save memory
         self.screenshot_base64 = None
 
+    def get_screenshot_data(self) -> Optional[bytes]:
+        """Alias for load_screenshot_bytes for UI compatibility."""
+        return self.load_screenshot_bytes()
+
+    @property
+    def timestamp(self) -> datetime:
+        """Helper to access timestamp from metadata."""
+        return self.metadata.timestamp
+
 
 class WorkflowMetadata(BaseModel):
     """Metadata for the entire workflow."""
@@ -116,6 +125,9 @@ class Workflow(BaseModel):
     description: Optional[str] = Field(default=None, description="Workflow description")
     steps: List[WorkflowStep] = Field(default_factory=list)
     metadata: WorkflowMetadata = Field(default_factory=WorkflowMetadata)
+    
+    # Session-specific path (not saved to JSON)
+    path: Optional[Path] = Field(default=None, exclude=True)
     
     # Analysis results (populated after AI analysis)
     analyzed: bool = Field(default=False)
@@ -218,6 +230,7 @@ class Workflow(BaseModel):
         with open(workflow_file, 'w', encoding='utf-8') as f:
             json.dump(self.model_dump(mode='json'), f, indent=2, default=str)
         
+        self.path = directory
         return directory
     
     @classmethod
@@ -240,7 +253,9 @@ class Workflow(BaseModel):
         with open(workflow_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
-        return cls.model_validate(data)
+        workflow = cls.model_validate(data)
+        workflow.path = directory
+        return workflow
     
     def get_screenshot_pairs(self) -> List[tuple[WorkflowStep, WorkflowStep]]:
         """

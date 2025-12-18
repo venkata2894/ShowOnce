@@ -1,0 +1,78 @@
+{
+    "workflow_name": "login_flow",
+    "total_transitions": 3,
+    "analyzed_at": "2024-12-18T13:00:00",
+    "parameters": [
+        {
+            "name": "username",
+            "description": "Username field"
+        },
+        {
+            "name": "password",
+            "description": "Password field"
+        }
+    ],
+    "actions": [
+        {
+            "action_type": "navigate",
+            "sequence": 1,
+            "description": "Navigate to the secure login area",
+            "url": "https://the-internet.herokuapp.com/login",
+            "confidence": 1.0
+        },
+        {
+            "action_type": "type",
+            "sequence": 2,
+            "description": "Enter the username into the input field",
+            "target": {
+                "description": "Username input",
+                "selectors": [
+                    {
+                        "strategy": "css",
+                        "value": "#username",
+                        "confidence": 1.0
+                    }
+                ]
+            },
+            "value": "tomsmith",
+            "is_variable": true,
+            "variable_name": "username",
+            "confidence": 0.95
+        },
+        {
+            "action_type": "type",
+            "sequence": 3,
+            "description": "Enter the password into the input field",
+            "target": {
+                "description": "Password input",
+                "selectors": [
+                    {
+                        "strategy": "css",
+                        "value": "#password",
+                        "confidence": 1.0
+                    }
+                ]
+            },
+            "value": "SuperSecretPassword!",
+            "is_variable": true,
+            "variable_name": "password",
+            "confidence": 0.95
+        },
+        {
+            "action_type": "click",
+            "sequence": 4,
+            "description": "Submit the login form",
+            "target": {
+                "description": "Login button",
+                "selectors": [
+                    {
+                        "strategy": "css",
+                        "value": "button.radius",
+                        "confidence": 1.0
+                    }
+                ]
+            },
+            "confidence": 0.98
+        }
+    ]
+}

@@ -1,0 +1,60 @@
+{
+    "workflow_name": "data_extraction",
+    "total_transitions": 3,
+    "analyzed_at": "2024-12-18T13:15:00",
+    "parameters": [
+        {
+            "name": "search_term",
+            "description": "Product to search for"
+        }
+    ],
+    "actions": [
+        {
+            "action_type": "navigate",
+            "sequence": 1,
+            "url": "https://www.ebay.com",
+            "description": "Go to eBay"
+        },
+        {
+            "action_type": "type",
+            "sequence": 2,
+            "target": {
+                "description": "Search bar",
+                "selectors": [
+                    {
+                        "strategy": "css",
+                        "value": "#gh-ac"
+                    }
+                ]
+            },
+            "is_variable": true,
+            "variable_name": "search_term",
+            "description": "Search for a product"
+        },
+        {
+            "action_type": "press_key",
+            "sequence": 3,
+            "key": "Enter",
+            "description": "Press Enter to search"
+        },
+        {
+            "action_type": "click",
+            "sequence": 4,
+            "target": {
+                "description": "First search result",
+                "selectors": [
+                    {
+                        "strategy": "css",
+                        "value": ".s-item__link"
+                    }
+                ]
+            },
+            "description": "Click on the first product result"
+        },
+        {
+            "action_type": "wait",
+            "sequence": 5,
+            "description": "Wait for product page to load"
+        }
+    ]
+}

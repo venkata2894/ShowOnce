@@ -84,8 +84,8 @@ dmypy.json
 .pyre/
 
 # Project specific
-workflows/*/screenshots/
-workflows/*/*.png
+workflows/
+generated/
 *.log
 .DS_Store
 Thumbs.db

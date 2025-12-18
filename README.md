@@ -1,128 +1,97 @@
-# 🎯 ShowOnce
+# ShowOnce 🎯
 
-**"Show me once. I'll do it forever."**
+[![Tests](https://github.com/venkata2894/ShowOnce/actions/workflows/test.yml/badge.svg)](https://github.com/venkata2894/ShowOnce/actions)
+[![PyPI version](https://img.shields.io/pypi/v/showonce.svg)](https://pypi.org/project/showonce/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
-ShowOnce is an AI-powered tool that learns automation workflows from screenshots. Simply demonstrate a task by capturing screenshots, and ShowOnce generates executable automation scripts.
+**Show me once. I'll do it forever.**
 
----
+ShowOnce is an AI-powered automation tool that learns workflows by watching you perform them. It captures your interactions via screenshots, analyzes the transitions using Claude Vision, and generates executable automation scripts in Playwright, Selenium, or PyAutoGUI.
 
-## ✨ Features
+## 🚀 Features
 
-- 📸 **Visual Recording** — Capture workflows with screenshots and descriptions
-- 🧠 **AI Analysis** — Claude Vision understands what actions you performed
-- ⚡ **Code Generation** — Automatically generates Playwright/Selenium scripts
-- 🔄 **Replay Anywhere** — Run generated automations with custom parameters
+- **Visual Recording**: Capture workflows naturally using hotkeys.
+- **AI Analysis**: Uses Claude 3.5 Sonnet Vision to infer actions, selectors, and variables.
+- **Multi-Framework Generation**: Generate code for Playwright (Python), Selenium, or PyAutoGUI.
+- **Smart Selectors**: Automatically identifies the most robust CSS, XPath, and Text selectors.
+- **Web Interface**: Manage, analyze, and generate scripts through a beautiful Streamlit dashboard.
+- **Direct Execution**: Run your generated automation directly from the browser with real-time logs and dynamic parameter forms.
+- **CLI Power**: Fully functional command-line interface for power users.
 
----
+## 🛠️ Installation
 
-## 🚀 Quick Start
-
-### Installation
-
+### 1. Clone the repository
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/showonce.git
-cd showonce
+git clone https://github.com/venkata2894/ShowOnce.git
+cd ShowOnce
+```
 
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
+### 2. Set up environment
+```bash
+python -m venv .venv
+source .venv/bin/activate  # Windows: .\.venv\Scripts\Activate
 pip install -r requirements.txt
-
-# Set up environment
-cp .env.example .env
-# Edit .env and add your ANTHROPIC_API_KEY
 ```
 
-### Usage
-
-```bash
-# Step 1: Record a workflow
-showonce record --name "login_demo"
-# Press Ctrl+Shift+S to capture each step
-# Press Ctrl+Shift+Q to stop recording
-
-# Step 2: Analyze and generate automation
-showonce generate --workflow "login_demo"
-
-# Step 3: Run the automation
-showonce run --workflow "login_demo" --params '{"username": "test"}'
+### 3. Configure API Key
+Create a `.env` file in the root directory:
+```env
+ANTHROPIC_API_KEY=your_sk_ant_key_here
 ```
 
----
+## 🎯 Quick Start
 
-## 📁 Project Structure
+### Methodology 1: The UI Way (Recommended)
+1. Start the dashboard:
+   ```bash
+   streamlit run showonce/ui/app.py
+   ```
+2. Create a new workflow and upload your screenshots, or use the CLI to record.
 
-```
-showonce/
-├── showonce/              # Main source code
-│   ├── models/            # Data structures
-│   ├── capture/           # Screenshot recording
-│   ├── analyze/           # AI analysis with Claude
-│   ├── generate/          # Code generation
-│   └── utils/             # Helper functions
-├── workflows/             # Saved workflows
-├── tests/                 # Test files
-└── docs/                  # Documentation
-```
+### Methodology 2: The CLI Way
+1. **Record**: Capture a new flow
+   ```bash
+   python -m showonce.cli record --name my_login
+   ```
+    - Press `Ctrl+Shift+M` to capture a step.
+    - Press `Ctrl+Shift+Q` to stop.
 
----
+2. **Analyze**: Let AI figure out the steps
+   ```bash
+   python -m showonce.cli analyze --workflow my_login
+   ```
 
-## 🔧 How It Works
+3. **Generate**: Create your script
+   ```bash
+   python -m showonce.cli generate --workflow my_login --framework playwright
+   ```
 
-```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│   CAPTURE    │     │   ANALYZE    │     │   GENERATE   │     │    RUN       │
-│              │────►│              │────►│              │────►│              │
-│ Screenshots  │     │ Claude AI    │     │  Playwright  │     │  Execute     │
-│ + Descriptions│    │  Vision      │     │   Script     │     │  Automation  │
-└──────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
-```
+## 📖 CLI Reference
 
-1. **Capture**: Record your workflow by taking screenshots and adding descriptions
-2. **Analyze**: AI analyzes screenshot transitions to infer actions
-3. **Generate**: Produces executable automation code
-4. **Run**: Execute the automation with your parameters
+| Command | Description |
+|---------|-------------|
+| `record` | Start a new recording session |
+| `list` | List all recorded workflows |
+| `info` | View details of a specific workflow |
+| `analyze`| Run AI analysis on a workflow |
+| `generate`| Generate automation code |
+| `run` | Execute a generated script |
+| `config` | View current configuration |
 
----
+## ⚙️ Configuration
 
-## 🛠️ Tech Stack
+Settings can be managed via `.env` or `showonce/config.py`.
 
-- **Python 3.10+**
-- **Anthropic Claude API** — Vision analysis
-- **Playwright** — Browser automation
-- **Pillow** — Image processing
-- **Click** — CLI framework
-- **Pydantic** — Data validation
-
----
-
-## 📖 Documentation
-
-- [Architecture Overview](docs/architecture.md)
-- [API Reference](docs/api.md)
-- [Contributing Guide](docs/contributing.md)
-
----
+- `ANTHROPIC_API_KEY`: Required for analysis.
+- `CAPTURE_HOTKEY`: Default `ctrl+shift+m`.
+- `STOP_HOTKEY`: Default `ctrl+shift+q`.
+- `DEFAULT_FRAMEWORK`: `playwright`, `selenium`, or `pyautogui`.
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please read our contributing guide before submitting PRs.
-
----
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## 📄 License
 
-MIT License — see [LICENSE](LICENSE) for details.
-
----
-
-## 🙏 Acknowledgments
-
-Built with ❤️ using Claude AI by Anthropic.
-
----
-
-**Made by [Venkata Sai](https://github.com/yourusername)**
+This project is licensed under the MIT License.
