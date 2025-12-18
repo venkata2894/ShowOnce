@@ -53,41 +53,20 @@ def record(name: str, description: Optional[str]):
     Press Ctrl+Shift+S to capture each step.
     Press Ctrl+Shift+Q to stop recording.
     """
-    log.banner()
-    log.section(f"Recording: {name}")
+    # Import here to avoid circular dependencies if any, and ensure clean startup
+    from showonce.capture import record_workflow
     
-    config = get_config()
-    
-    console.print(f"[cyan]Workflow:[/cyan] {name}")
-    if description:
-        console.print(f"[cyan]Description:[/cyan] {description}")
-    
-    console.print()
-    console.print(f"[yellow]📸 Capture:[/yellow] {config.capture.capture_hotkey}")
-    console.print(f"[yellow]🛑 Stop:[/yellow] {config.capture.stop_hotkey}")
-    console.print()
-    
-    # TODO: Stage 2 - Implement actual capture logic
-    console.print("[dim]Recording functionality will be implemented in Stage 2[/dim]")
-    
-    # Create workflow placeholder
-    workflow = Workflow(name=name, description=description)
-    
-    # Simulate a workflow for testing
-    console.print()
-    console.print("[yellow]Simulating workflow capture for testing...[/yellow]")
-    workflow.add_step(description="Open browser to login page")
-    workflow.add_step(description="Enter username")
-    workflow.add_step(description="Enter password")
-    workflow.add_step(description="Click login button")
-    
-    # Save workflow
-    save_path = config.paths.workflows_dir / name
-    workflow.save(save_path)
-    
-    log.success(f"Workflow saved to: {save_path}")
-    console.print()
-    console.print(workflow.summary())
+    try:
+        workflow = record_workflow(name, description)
+        
+        if workflow and workflow.step_count > 0:
+            console.print()
+            log.success(f"Workflow '{name}' recorded successfully!")
+            console.print(workflow.summary())
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Recording cancelled.[/yellow]")
+    except Exception as e:
+        console.print(f"\n[bold red]Error during recording: {e}[/bold red]")
 
 
 @main.command()

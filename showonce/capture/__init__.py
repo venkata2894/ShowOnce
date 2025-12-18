@@ -1,11 +1,23 @@
 """
 Capture module for ShowOnce.
 
-Handles screenshot recording and workflow capture.
-Will be implemented in Stage 2.
+This module handles:
+- Screenshot capture (ScreenCapture)
+- Hotkey listening (HotkeyListener)
+- System metadata collection (MetadataCollector)
+- Session recording orchestration (RecordingSession)
 """
 
-# TODO: Stage 2 - Implement capture functionality
-# - Screenshot capture with hotkeys
-# - Metadata collection
-# - Workflow recording session management
+from showonce.capture.screenshot import ScreenCapture
+from showonce.capture.hotkeys import HotkeyListener
+from showonce.capture.metadata import MetadataCollector, CaptureMetadata
+from showonce.capture.recorder import RecordingSession, record_workflow
+
+__all__ = [
+    "ScreenCapture",
+    "HotkeyListener",
+    "MetadataCollector",
+    "CaptureMetadata",
+    "RecordingSession",
+    "record_workflow",
+]
