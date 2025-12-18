@@ -77,6 +77,9 @@ def analyze(workflow: str):
     
     Processes screenshots to infer actions between steps.
     """
+    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
+    from showonce.analyze import ActionInferenceEngine
+    
     log.banner()
     log.section(f"Analyzing: {workflow}")
     
@@ -97,9 +100,71 @@ def analyze(workflow: str):
     wf = Workflow.load(workflow_path)
     console.print(f"[cyan]Loaded workflow with {wf.step_count} steps[/cyan]")
     
-    # TODO: Stage 3 - Implement actual analysis logic
-    console.print()
-    console.print("[dim]Analysis functionality will be implemented in Stage 3[/dim]")
+    if wf.step_count < 2:
+        console.print("[yellow]Workflow needs at least 2 steps to analyze transitions.[/yellow]")
+        return
+    
+    total_transitions = wf.step_count - 1
+    console.print(f"[dim]Analyzing {total_transitions} transition(s)...[/dim]\n")
+    
+    try:
+        engine = ActionInferenceEngine()
+        
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            console=console
+        ) as progress:
+            task = progress.add_task("Analyzing...", total=total_transitions)
+            
+            def update_progress(current: int, total: int):
+                progress.update(task, completed=current, description=f"Step {current}/{total}")
+            
+            action_sequence = engine.analyze_workflow(wf, progress_callback=update_progress)
+        
+        # Display results
+        console.print()
+        log.section("Inferred Actions")
+        
+        for action in action_sequence.actions:
+            action_type = action.action_type.value if hasattr(action.action_type, 'value') else str(action.action_type)
+            confidence_pct = int(action.confidence * 100)
+            
+            # Color based on confidence
+            if confidence_pct >= 80:
+                conf_color = "green"
+            elif confidence_pct >= 50:
+                conf_color = "yellow"
+            else:
+                conf_color = "red"
+            
+            console.print(
+                f"  [{conf_color}]●[/{conf_color}] "
+                f"[bold]{action.sequence}.[/bold] "
+                f"[cyan]{action_type.upper()}[/cyan] - "
+                f"{action.description or 'No description'} "
+                f"[dim]({confidence_pct}% confidence)[/dim]"
+            )
+            
+            if action.target and action.target.get_primary_selector():
+                sel = action.target.get_primary_selector()
+                console.print(f"      [dim]Selector: {sel.value}[/dim]")
+        
+        # Save analysis to workflow
+        wf.analyzed = True
+        # Store action sequence data in workflow metadata or as separate file
+        # For now, save the workflow to mark it as analyzed
+        wf.save(workflow_path)
+        
+        console.print()
+        log.success(f"Analysis complete! {len(action_sequence.actions)} actions inferred.")
+        console.print(f"[dim]Workflow saved to: {workflow_path}[/dim]")
+        
+    except Exception as e:
+        console.print(f"\n[bold red]Error during analysis: {e}[/bold red]")
+        sys.exit(1)
 
 
 @main.command()
@@ -108,10 +173,15 @@ def analyze(workflow: str):
               type=click.Choice(["playwright", "selenium", "pyautogui"]),
               help="Automation framework to use")
 @click.option("--output", "-o", default=None, help="Output file path")
-def generate(workflow: str, framework: Optional[str], output: Optional[str]):
+@click.option("--headless", is_flag=True, help="Generate with headless mode enabled")
+def generate(workflow: str, framework: Optional[str], output: Optional[str], headless: bool):
     """
     Generate automation script from analyzed workflow.
     """
+    import json
+    from showonce.generate import get_generator
+    from showonce.analyze import ActionInferenceEngine
+    
     log.banner()
     log.section(f"Generating: {workflow}")
     
@@ -125,44 +195,146 @@ def generate(workflow: str, framework: Optional[str], output: Optional[str]):
         sys.exit(1)
     
     wf = Workflow.load(workflow_path)
+    console.print(f"[cyan]Loaded workflow with {wf.step_count} steps[/cyan]")
     
+    # Check if analyzed
     if not wf.analyzed:
         console.print("[yellow]Warning: Workflow has not been analyzed yet[/yellow]")
-        console.print("Run 'showonce analyze' first for best results")
+        console.print("[dim]Running analysis first...[/dim]\n")
+        
+        # Run analysis
+        if not config.analyze.api_key:
+            console.print("[red]Error: Cannot analyze - ANTHROPIC_API_KEY not set[/red]")
+            sys.exit(1)
+        
+        engine = ActionInferenceEngine()
+        action_sequence = engine.analyze_workflow(wf)
+        wf.analyzed = True
+        wf.save(workflow_path)
+    else:
+        # Load existing analysis or re-analyze
+        console.print("[green]Workflow already analyzed[/green]")
+        engine = ActionInferenceEngine()
+        action_sequence = engine.analyze_workflow(wf)
     
     console.print(f"[cyan]Framework:[/cyan] {framework}")
+    console.print(f"[cyan]Actions:[/cyan] {len(action_sequence.actions)}")
     
-    # TODO: Stage 4 - Implement actual generation logic
-    console.print()
-    console.print("[dim]Generation functionality will be implemented in Stage 4[/dim]")
+    try:
+        # Get appropriate generator
+        generator = get_generator(framework, headless=headless)
+        
+        # Generate code
+        code = generator.generate(action_sequence)
+        
+        # Determine output path
+        if output:
+            output_path = Path(output)
+        else:
+            output_path = config.paths.output_dir / f"{workflow}_{framework}.py"
+        
+        # Save code
+        generator.save(code, output_path)
+        
+        # Display summary
+        console.print()
+        log.section("Generated Script")
+        
+        # Show first 30 lines
+        lines = code.split('\n')
+        preview_lines = lines[:30]
+        for i, line in enumerate(preview_lines, 1):
+            console.print(f"[dim]{i:3}[/dim] {line}")
+        
+        if len(lines) > 30:
+            console.print(f"[dim]... ({len(lines) - 30} more lines)[/dim]")
+        
+        console.print()
+        log.success(f"Script generated: {output_path}")
+        console.print(f"[dim]Run with: python {output_path}[/dim]")
+        
+    except Exception as e:
+        console.print(f"\n[bold red]Error during generation: {e}[/bold red]")
+        sys.exit(1)
 
 
 @main.command()
 @click.option("--workflow", "-w", required=True, help="Workflow name to run")
 @click.option("--params", "-p", default=None, help="JSON parameters for the workflow")
-@click.option("--headless", is_flag=True, help="Run browser in headless mode")
-def run(workflow: str, params: Optional[str], headless: bool):
+@click.option("--framework", "-f", default=None,
+              type=click.Choice(["playwright", "selenium", "pyautogui"]),
+              help="Framework of script to run")
+@click.option("--timeout", "-t", default=300, help="Execution timeout in seconds")
+def run(workflow: str, params: Optional[str], framework: Optional[str], timeout: int):
     """
     Execute a generated automation script.
     """
+    import json
+    from showonce.generate import ScriptRunner
+    
     log.banner()
     log.section(f"Running: {workflow}")
     
     config = get_config()
+    framework = framework or config.generate.default_framework
     
-    # Load workflow
-    workflow_path = config.paths.workflows_dir / workflow
-    if not workflow_path.exists():
-        console.print(f"[red]Error: Workflow not found: {workflow}[/red]")
+    # Find generated script
+    script_path = config.paths.output_dir / f"{workflow}_{framework}.py"
+    
+    if not script_path.exists():
+        console.print(f"[red]Error: Generated script not found: {script_path}[/red]")
+        console.print(f"[dim]Run 'showonce generate -w {workflow}' first[/dim]")
         sys.exit(1)
     
-    console.print(f"[cyan]Headless:[/cyan] {headless}")
-    if params:
-        console.print(f"[cyan]Parameters:[/cyan] {params}")
+    console.print(f"[cyan]Script:[/cyan] {script_path}")
+    console.print(f"[cyan]Framework:[/cyan] {framework}")
+    console.print(f"[cyan]Timeout:[/cyan] {timeout}s")
     
-    # TODO: Stage 4 - Implement actual run logic
-    console.print()
-    console.print("[dim]Run functionality will be implemented in Stage 4[/dim]")
+    # Parse parameters
+    parsed_params = {}
+    if params:
+        try:
+            parsed_params = json.loads(params)
+            console.print(f"[cyan]Parameters:[/cyan] {parsed_params}")
+        except json.JSONDecodeError as e:
+            console.print(f"[red]Error: Invalid JSON parameters: {e}[/red]")
+            sys.exit(1)
+    
+    try:
+        runner = ScriptRunner(script_path)
+        
+        # Validate script first
+        is_valid, error = runner.validate_script()
+        if not is_valid:
+            console.print(f"[red]Script validation failed: {error}[/red]")
+            sys.exit(1)
+        
+        # Check dependencies
+        deps_ok, missing = runner.check_dependencies()
+        if not deps_ok:
+            console.print(f"[yellow]Warning: Missing dependencies: {missing}[/yellow]")
+            console.print(f"[dim]Install with: pip install {' '.join(missing)}[/dim]")
+        
+        console.print()
+        log.section("Execution Output")
+        console.print()
+        
+        # Run interactively so user can see output and provide input
+        exit_code = runner.run_interactive(params=parsed_params, timeout=timeout)
+        
+        console.print()
+        if exit_code == 0:
+            log.success("Script executed successfully!")
+        else:
+            console.print(f"[red]Script exited with code: {exit_code}[/red]")
+            sys.exit(exit_code)
+            
+    except FileNotFoundError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"\n[bold red]Error during execution: {e}[/bold red]")
+        sys.exit(1)
 
 
 @main.command(name="list")
