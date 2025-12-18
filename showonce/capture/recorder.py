@@ -20,10 +20,18 @@ from showonce.utils.logger import log
 class RecordingSession:
     """Manage a workflow recording session."""
     
-    def __init__(self, workflow_name: str, description: Optional[str] = None):
-        """Initialize recording session."""
+    def __init__(self, workflow_name: str, description: Optional[str] = None, no_prompt: bool = False):
+        """
+        Initialize recording session.
+        
+        Args:
+            workflow_name: Name of the workflow
+            description: Optional description
+            no_prompt: If True, don't prompt for descriptions (uses default)
+        """
         self.config = get_config()
         self.workflow = Workflow(name=workflow_name, description=description)
+        self.no_prompt = no_prompt
         
         # Components
         self.screen_capture = ScreenCapture()
@@ -100,7 +108,10 @@ class RecordingSession:
             # BUT we might face stdin contention if multiple threads try to read.
             # We should probably lock around prompting.
             
-            description = self._prompt_description()
+            if self.no_prompt:
+                description = f"Captured at {meta.timestamp.strftime('%H:%M:%S')}"
+            else:
+                description = self._prompt_description()
             
             # 4. Create Step
             step = self.workflow.add_step(

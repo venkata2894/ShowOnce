@@ -19,6 +19,9 @@ from showonce.config import get_config
 from showonce.models.workflow import Workflow
 from showonce.models.actions import ActionSequence, ActionType
 from showonce.generate.runner import ScriptRunner
+from showonce.capture.recorder import RecordingSession
+import threading
+import time
 
 
 # Page configuration
@@ -93,6 +96,64 @@ def get_workflows():
 
 
 
+def render_recording_section():
+    """Render the live recording interface."""
+    if "recording_active" not in st.session_state:
+        st.session_state.recording_active = False
+    
+    if not st.session_state.recording_active:
+        st.write("Start a live recording session. Use your hotkey to capture steps.")
+        col1, col2 = st.columns(2)
+        with col1:
+            name = st.text_input("Recording Name", placeholder="e.g. quick_test", key="rec_name")
+        with col2:
+            desc = st.text_input("Description (Optional)", placeholder="What are you recording?", key="rec_desc")
+            
+        if st.button("🔴 Start Recording", type="primary", use_container_width=True):
+            if not name:
+                st.error("Please provide a name for the recording.")
+            else:
+                start_live_recording(name, desc)
+                st.rerun()
+    else:
+        st.success(f"🎥 Recording Active: **{st.session_state.recording_name}**")
+        st.info(f"Press `{get_config().capture.capture_hotkey}` to capture steps.")
+        
+        if st.button("⏹️ Stop & Save", type="primary", use_container_width=True):
+            stop_live_recording()
+            st.rerun()
+
+def start_live_recording(name, desc):
+    """Start the recorder in a background thread."""
+    session = RecordingSession(name, desc, no_prompt=True)
+    st.session_state.recording_session = session
+    st.session_state.recording_active = True
+    st.session_state.recording_name = name
+    
+    # Start in background thread
+    thread = threading.Thread(target=session.start, daemon=True)
+    thread.start()
+    st.session_state.recording_thread = thread
+
+def stop_live_recording():
+    """Stop the recording session."""
+    if "recording_session" in st.session_state:
+        session = st.session_state.recording_session
+        session.stop()
+        st.session_state.recording_active = False
+        # Give it a second to save
+        time.sleep(1)
+        
+        if session.workflow.step_count > 0:
+            st.success(f"Workflow '{st.session_state.recording_name}' saved with {session.workflow.step_count} steps!")
+        else:
+            st.warning(f"No steps captured for '{st.session_state.recording_name}'. Process stopped.")
+        
+        # Cleanup session state
+        del st.session_state.recording_session
+        if "recording_thread" in st.session_state:
+            del st.session_state.recording_thread
+
 def render_dashboard(workflows):
     """Render the main dashboard."""
     st.markdown('<p class="main-header">📊 Dashboard</p>', unsafe_allow_html=True)
@@ -109,6 +170,10 @@ def render_dashboard(workflows):
                     st.error("Workflow name is required")
                 else:
                     create_workflow_ui(new_name, new_desc)
+    
+    # 🔴 Live Recording Section
+    with st.expander("🔴 Live Recording", expanded=st.session_state.get("recording_active", False)):
+        render_recording_section()
     
     st.divider()
     
