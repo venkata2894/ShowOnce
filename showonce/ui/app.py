@@ -110,18 +110,28 @@ def render_recording_section():
             desc = st.text_input("Description (Optional)", placeholder="What are you recording?", key="rec_desc")
             
         if st.button("🔴 Start Recording", type="primary", use_container_width=True):
-            if not name:
-                st.error("Please provide a name for the recording.")
-            else:
-                start_live_recording(name, desc)
-                st.rerun()
+            rec_name = name or f"recording_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            start_live_recording(rec_name, desc)
+            st.rerun()
     else:
         st.success(f"🎥 Recording Active: **{st.session_state.recording_name}**")
-        st.info(f"Press `{get_config().capture.capture_hotkey}` to capture steps.")
         
-        if st.button("⏹️ Stop & Save", type="primary", use_container_width=True):
-            stop_live_recording()
-            st.rerun()
+        # Live Stats and Manual Capture
+        col_capture, col_stop = st.columns([2, 1])
+        
+        with col_capture:
+            st.metric("Steps Captured", st.session_state.recording_session.workflow.step_count)
+            if st.button("📸 Capture Step Now", type="primary", use_container_width=True, help="Click this or press your Hotkey"):
+                st.session_state.recording_session.request_capture()
+                time.sleep(0.5) # Wait for capture
+                st.rerun()
+                
+        with col_stop:
+            st.write("") # Alignment
+            st.info(f"Hotkey: `{get_config().capture.capture_hotkey}`")
+            if st.button("⏹️ Finish & Save", type="secondary", use_container_width=True):
+                stop_live_recording()
+                st.rerun()
 
 def start_live_recording(name, desc):
     """Start the recorder in a background thread."""

@@ -42,6 +42,7 @@ class RecordingSession:
         # State
         self.is_recording = False
         self._stop_event = threading.Event()
+        self._capture_requested = threading.Event()
         
         log.debug(f"Initialized RecordingSession for '{workflow_name}'")
     
@@ -72,6 +73,9 @@ class RecordingSession:
         # Wait until stopped
         try:
             while not self._stop_event.is_set():
+                if self._capture_requested.is_set():
+                    self.capture_step()
+                    self._capture_requested.clear()
                 time.sleep(0.1)
         except KeyboardInterrupt:
             self.stop()
@@ -164,6 +168,10 @@ class RecordingSession:
             self.console.print(f"[bold red]Error saving workflow: {e}[/bold red]")
             raise
     
+    def request_capture(self) -> None:
+        """Manually request a capture (used by UI)."""
+        self._capture_requested.set()
+        
     def _on_capture_hotkey(self) -> None:
         """Callback for capture hotkey."""
         if self.is_recording:
