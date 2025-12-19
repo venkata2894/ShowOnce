@@ -84,7 +84,7 @@ dmypy.json
 .pyre/
 
 # Project specific
-workflows/
+/workflows/
 generated/
 *.log
 .DS_Store
