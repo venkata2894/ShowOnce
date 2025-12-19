@@ -7,7 +7,7 @@ These models represent what the AI determines happened between screenshots.
 
 from enum import Enum
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
 
 class ActionType(str, Enum):
@@ -216,14 +216,14 @@ class Action(BaseModel):
     )
     
     # For scroll actions
-    scroll_amount: Optional[int] = None
+    scroll_amount: Optional[int] = Field(default=None)
     
     # For navigation
-    url: Optional[str] = None
+    url: Optional[str] = Field(default=None)
     
     # For drag actions
-    drag_start: Optional[tuple[int, int]] = None
-    drag_end: Optional[tuple[int, int]] = None
+    drag_start: Optional[tuple[int, int]] = Field(default=None)
+    drag_end: Optional[tuple[int, int]] = Field(default=None)
     
     # Confidence and verification
     confidence: float = Field(
@@ -242,10 +242,15 @@ class Action(BaseModel):
     )
     
     # Human-readable description
-    description: str = Field(
+    description: Optional[str] = Field(
         default="",
         description="Human-readable action description"
     )
+    
+    # Add validator to handle None
+    @validator('description', pre=True, always=True)
+    def ensure_description_not_none(cls, v):
+        return v if v is not None else ""
     
     # Raw AI analysis output
     raw_analysis: Optional[Dict[str, Any]] = Field(

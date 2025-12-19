@@ -9,12 +9,11 @@ from showonce.models.actions import (
     Selector, SelectorStrategy
 )
 from showonce.analyze.vision import ClaudeVision, create_vision_client
-from showonce.analyze.prompts import (
-    build_transition_prompt, parse_analysis_response, 
-    get_system_prompt
-)
+from showonce.analyze.prompts import build_transition_prompt, parse_api_response, get_system_prompt
 from showonce.config import get_config
 from showonce.utils.logger import log
+import re
+import json
 
 
 class ActionInferenceEngine:
@@ -33,47 +32,26 @@ class ActionInferenceEngine:
         workflow: Workflow,
         progress_callback: Optional[Callable[[int, int], None]] = None
     ) -> ActionSequence:
-        """
-        Analyze complete workflow and infer all actions.
-        
-        Args:
-            workflow: Workflow to analyze
-            progress_callback: Optional callback(current, total) for progress
-            
-        Returns:
-            ActionSequence with all inferred actions
-        """
+        """Analyze complete workflow and infer all actions with accurate reporting."""
         log.info(f"Analyzing workflow: {workflow.name} ({workflow.step_count} steps)")
-        
-        if workflow.step_count < 2:
-            log.warning("Workflow has fewer than 2 steps, nothing to analyze")
-            return ActionSequence(
-                workflow_name=workflow.name,
-                total_transitions=0,
-                analyzed_at=datetime.now().isoformat(),
-                model_used=self.config.analyze.model
-            )
         
         action_sequence = ActionSequence(
             workflow_name=workflow.name,
-            total_transitions=workflow.step_count - 1,
+            total_transitions=workflow.transition_count,
             analyzed_at=datetime.now().isoformat(),
             model_used=self.config.analyze.model
         )
         
-        steps = workflow.steps
-        total_transitions = len(steps) - 1
+        pairs = workflow.get_screenshot_pairs()
+        successful_parses = 0
+        failed_parses = 0
         action_counter = 1
         
-        for i in range(total_transitions):
-            before_step = steps[i]
-            after_step = steps[i + 1]
-            
+        for i, (before_step, after_step) in enumerate(pairs):
             if progress_callback:
-                progress_callback(i + 1, total_transitions)
+                progress_callback(i + 1, len(pairs))
             
-            log.info(f"Analyzing transition {i+1}/{total_transitions}: "
-                    f"Step {before_step.step_number} -> Step {after_step.step_number}")
+            log.info(f"Analyzing transition {i+1}/{len(pairs)}: Step {before_step.step_number} -> {after_step.step_number}")
             
             try:
                 actions = self.analyze_transition(
@@ -85,24 +63,51 @@ class ActionInferenceEngine:
                     }
                 )
                 
-                for action in actions:
-                    action_sequence.add_action(action)
+                # Count only valid, non-unknown actions
+                valid_actions = [a for a in actions 
+                              if a.action_type != ActionType.UNKNOWN 
+                              and (a.description != "" or a.target is not None)]
+                
+                if valid_actions:
+                    for action in valid_actions:
+                        action_sequence.add_action(action)
+                        action_counter += 1
+                    successful_parses += 1
+                else:
+                    failed_parses += 1
+                    log.warning(f"Transition {i+1}: No valid actions parsed")
+                    # Still add a fallback so the sequence isn't broken
+                    fallback = Action(
+                        action_type=ActionType.UNKNOWN,
+                        sequence=action_counter,
+                        description=after_step.description or f"Step {after_step.step_number}",
+                        confidence=0.0
+                    )
+                    action_sequence.add_action(fallback)
                     action_counter += 1
                     
             except Exception as e:
-                log.error(f"Failed to analyze transition {i+1}: {e}")
-                # Add a fallback action so we don't lose the step
+                failed_parses += 1
+                log.error(f"Transition {i+1} failed: {e}")
                 fallback = Action(
                     action_type=ActionType.UNKNOWN,
                     sequence=action_counter,
                     description=after_step.description or f"Step {after_step.step_number}",
-                    confidence=0.0,
-                    reasoning=f"Analysis failed: {str(e)}"
+                    confidence=0.0
                 )
                 action_sequence.add_action(fallback)
                 action_counter += 1
         
-        log.success(f"Workflow analysis complete: {len(action_sequence.actions)} actions inferred")
+        # Accurate reporting
+        total = len(pairs)
+        if total > 0:
+            if failed_parses == total:
+                log.error(f"❌ Analysis FAILED: All {total} transitions failed to parse")
+            elif failed_parses > 0:
+                log.warning(f"⚠️ Partial: {successful_parses}/{total} transitions successful")
+            else:
+                log.success(f"✓ Success: All {total} transitions analyzed")
+                
         return action_sequence
     
     def analyze_transition(
@@ -138,86 +143,75 @@ class ActionInferenceEngine:
         
         # Call Claude Vision
         try:
-            response = self.vision.analyze_transition(
+            response_text = self.vision.analyze_transition(
                 before_image=before_image,
                 after_image=after_image,
-                user_description=user_description,
+                user_description=prompt, # Pass the formatted prompt as user_description
                 system_prompt=system_prompt
             )
             
-            # Response is already parsed dict from vision.py
-            if "error" in response:
-                log.error(f"Analysis returned error: {response['error']}")
-                return [Action(
-                    action_type=ActionType.UNKNOWN,
-                    sequence=sequence_start,
-                    description=after_step.description or "Unknown",
-                    confidence=0.0,
-                    reasoning=response.get("error", "Unknown error")
-                )]
-            
-            return self._parse_to_actions(response, sequence_start)
+            # Response is now raw text, parse it
+            return self._parse_to_actions(response_text, sequence_start)
             
         except Exception as e:
             log.error(f"Vision analysis failed: {e}")
             raise
     
-    def _parse_to_actions(self, analysis: dict, sequence_start: int) -> List[Action]:
-        """Convert parsed analysis to Action objects."""
+    def _parse_to_actions(self, response_text: str, sequence_start: int = 1) -> List[Action]:
+        """Convert API response text to a list of Action objects."""
+        # Use robust parser from prompts.py
+        analysis = parse_api_response(response_text)
+        
+        if not analysis or "actions" not in analysis:
+            log.error("API response missing 'actions' key")
+            return []
+        
         actions = []
-        
-        # Handle both single action and multiple actions
-        action_list = analysis.get("actions", [])
-        if not action_list:
-            # Maybe it's a single action format
-            if "action_type" in analysis:
-                action_list = [analysis]
-        
-        for i, action_data in enumerate(action_list):
+        for i, action_data in enumerate(analysis.get("actions", [])):
             try:
-                action_type = self._determine_action_type(
-                    action_data.get("type") or action_data.get("action_type", "unknown")
-                )
+                # 1. Ensure description exists (handled by Action validator too, but good to be explicit)
+                if "description" not in action_data or action_data["description"] is None:
+                    action_data["description"] = f"Action {sequence_start + i}"
                 
-                target = None
-                target_data = action_data.get("target")
-                if target_data:
-                    target = self._create_element_target(target_data)
-                
-                action = Action(
-                    action_type=action_type,
-                    sequence=sequence_start + i,
-                    target=target,
-                    value=action_data.get("value"),
-                    description=action_data.get("description") or 
-                               target_data.get("description") if target_data else None,
-                    confidence=float(action_data.get("confidence", 0.5)),
-                    is_variable=action_data.get("is_variable", False),
-                    variable_name=action_data.get("variable_name"),
-                    reasoning=action_data.get("reasoning")
-                )
-                actions.append(action)
-                
+                # 2. Create action with safe defaults
+                action = self._create_action_safe(action_data, sequence_start + i)
+                if action:
+                    actions.append(action)
+                    
             except Exception as e:
-                log.warning(f"Failed to parse action {i}: {e}")
-                # Add fallback
-                actions.append(Action(
-                    action_type=ActionType.UNKNOWN,
-                    sequence=sequence_start + i,
-                    confidence=0.0,
-                    reasoning=f"Parse error: {str(e)}"
-                ))
-        
-        if not actions:
-            # No actions parsed, return unknown
-            actions.append(Action(
-                action_type=ActionType.UNKNOWN,
-                sequence=sequence_start,
-                confidence=0.0,
-                reasoning="No actions detected in analysis"
-            ))
-        
+                log.error(f"Failed to parse action {i}: {e}")
+                continue
+                
         return actions
+    
+    def _create_action_safe(self, action_data: dict, sequence: int) -> Optional[Action]:
+        """Create Action with safe defaults for missing fields."""
+        try:
+            # Map action type safely
+            action_type_str = action_data.get("type") or action_data.get("action_type", "unknown")
+            action_type = self._determine_action_type(action_type_str)
+            
+            # Build target if present
+            target = None
+            target_data = action_data.get("target")
+            if target_data:
+                target = self._create_element_target(target_data)
+            
+            # Create action with all required fields
+            return Action(
+                action_type=action_type,
+                sequence=sequence,
+                target=target,
+                description=action_data.get("description") or f"Step {sequence}",
+                value=action_data.get("value"),
+                is_variable=action_data.get("is_variable", False),
+                variable_name=action_data.get("variable_name"),
+                confidence=float(action_data.get("confidence", 0.5)),
+                raw_analysis=action_data
+            )
+        except Exception as e:
+            log.error(f"Failed to create action: {e}")
+            return None
     
     def _create_element_target(self, target_data: dict) -> ElementTarget:
         """Create ElementTarget from analysis data."""

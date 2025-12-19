@@ -102,40 +102,53 @@ def render_recording_section():
         st.session_state.recording_active = False
     
     if not st.session_state.recording_active:
-        st.write("Start a live recording session. Use your hotkey to capture steps.")
+        st.write("Start a live recording session. Use your hotkey or enable Automatic Mode.")
         col1, col2 = st.columns(2)
         with col1:
             name = st.text_input("Recording Name", placeholder="e.g. quick_test", key="rec_name")
         with col2:
             desc = st.text_input("Description (Optional)", placeholder="What are you recording?", key="rec_desc")
+        
+        auto_mode = st.toggle("🚀 Automatic Mode: Capture on every click", value=True, help="Automatically capture a step whenever you click outside this window.")
             
-        if st.button("🔴 Start Recording", type="primary", use_container_width=True):
+        if st.button("🔴 Start Recording", type="primary", width="stretch"):
             rec_name = name or f"recording_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            start_live_recording(rec_name, desc)
+            start_live_recording(rec_name, desc, auto_capture=auto_mode)
             st.rerun()
     else:
         st.success(f"🎥 Recording Active: **{st.session_state.recording_name}**")
         
         # Live Stats and Manual Capture
-        col_capture, col_stop = st.columns([2, 1])
+        col_stats, col_preview = st.columns([1, 1])
         
-        with col_capture:
-            st.metric("Steps Captured", st.session_state.recording_session.workflow.step_count)
-            if st.button("📸 Capture Step Now", type="primary", use_container_width=True, help="Click this or press your Hotkey"):
-                st.session_state.recording_session.request_capture()
-                time.sleep(0.5) # Wait for capture
+        session = st.session_state.recording_session
+        
+        with col_stats:
+            st.metric("Steps Captured", session.workflow.step_count)
+            if session.auto_capture:
+                st.info("⚡ Automatic Mode is ON. Clicks on other windows are being captured.")
+            
+            if st.button("📸 Manual Capture", width="stretch"):
+                session.request_capture()
+                time.sleep(0.5)
                 st.rerun()
-                
-        with col_stop:
-            st.write("") # Alignment
-            st.info(f"Hotkey: `{get_config().capture.capture_hotkey}`")
-            if st.button("⏹️ Finish & Save", type="secondary", use_container_width=True):
+            
+            if st.button("⏹️ Finish & Save", type="primary", width="stretch"):
                 stop_live_recording()
                 st.rerun()
+            
+            st.button("🔄 Refresh Preview", width="stretch")
 
-def start_live_recording(name, desc):
+        with col_preview:
+            st.subheader("Live Preview")
+            if session.last_screenshot:
+                st.image(session.last_screenshot, caption="Last Captured Step", width="stretch")
+            else:
+                st.info("No steps captured yet. Use your hotkey or click elsewhere to capture.")
+
+def start_live_recording(name, desc, auto_capture=False):
     """Start the recorder in a background thread."""
-    session = RecordingSession(name, desc, no_prompt=True)
+    session = RecordingSession(name, desc, no_prompt=True, auto_capture=auto_capture)
     st.session_state.recording_session = session
     st.session_state.recording_active = True
     st.session_state.recording_name = name
@@ -173,6 +186,7 @@ def render_dashboard(workflows):
         with st.form("new_workflow_form"):
             new_name = st.text_input("Workflow Name", placeholder="e.g. login_test")
             new_desc = st.text_area("Description", placeholder="Describe what this workflow does...")
+            auto_cap = st.checkbox("Automatic Mode: Capture on every click", value=False, help="Automatically capture a step whenever you click outside this window.")
             submit_new = st.form_submit_button("Create Workflow")
             
             if submit_new:
@@ -303,7 +317,7 @@ def render_steps_tab(workflow):
                     with s_col1:
                         screenshot_data = step.get_screenshot_data()
                         if screenshot_data:
-                            st.image(screenshot_data, use_container_width=True)
+                            st.image(screenshot_data, width="stretch")
                         else:
                             st.warning("Screenshot not available")
                     with s_col2:
@@ -502,7 +516,7 @@ def render_generate_page(workflow_name, workflows):
         headless = st.checkbox("Headless Mode", value=False)
     with col3:
         st.markdown("<br>", unsafe_allow_html=True)
-        generate_btn = st.button("Generate Script", type="primary", use_container_width=True)
+        generate_btn = st.button("Generate Script", type="primary", width="stretch")
     
     if generate_btn:
         generate_code_ui(workflow_name, workflow_info, framework, headless)
@@ -593,7 +607,7 @@ def main():
         if workflows:
             st.subheader("Recent Workflows")
             for wf in workflows[:5]:
-                if st.button(wf["name"], key=f"sb_{wf['name']}", use_container_width=True):
+                if st.button(wf["name"], key=f"sb_{wf['name']}", width="stretch"):
                     st.session_state.selected_workflow = wf["name"]
                     st.session_state.page = "🔍 Workflow Viewer"
                     st.rerun()

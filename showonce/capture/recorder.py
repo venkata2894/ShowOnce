@@ -14,13 +14,14 @@ from showonce.models.workflow import Workflow, WorkflowStep
 from showonce.config import get_config
 from showonce.capture.screenshot import ScreenCapture
 from showonce.capture.hotkeys import HotkeyListener
+from showonce.capture.mouse import MouseListener
 from showonce.capture.metadata import MetadataCollector
 from showonce.utils.logger import log
 
 class RecordingSession:
     """Manage a workflow recording session."""
     
-    def __init__(self, workflow_name: str, description: Optional[str] = None, no_prompt: bool = False):
+    def __init__(self, workflow_name: str, description: Optional[str] = None, no_prompt: bool = False, auto_capture: bool = False):
         """
         Initialize recording session.
         
@@ -28,14 +29,17 @@ class RecordingSession:
             workflow_name: Name of the workflow
             description: Optional description
             no_prompt: If True, don't prompt for descriptions (uses default)
+            auto_capture: If True, capture automatically on mouse clicks
         """
         self.config = get_config()
         self.workflow = Workflow(name=workflow_name, description=description)
         self.no_prompt = no_prompt
+        self.auto_capture = auto_capture
         
         # Components
         self.screen_capture = ScreenCapture()
         self.hotkey_listener = HotkeyListener()
+        self.mouse_listener = MouseListener(on_click=self._on_mouse_click) if auto_capture else None
         self.metadata_collector = MetadataCollector()
         self.console = Console()
         
@@ -43,8 +47,9 @@ class RecordingSession:
         self.is_recording = False
         self._stop_event = threading.Event()
         self._capture_requested = threading.Event()
+        self.last_screenshot: Optional[bytes] = None
         
-        log.debug(f"Initialized RecordingSession for '{workflow_name}'")
+        log.debug(f"Initialized RecordingSession for '{workflow_name}' (auto_capture={auto_capture})")
     
     def start(self) -> Workflow:
         """
@@ -69,6 +74,9 @@ class RecordingSession:
         self.hotkey_listener.register(self.config.capture.stop_hotkey, self._on_stop_hotkey)
         
         self.hotkey_listener.start()
+        
+        if self.auto_capture and self.mouse_listener:
+            self.mouse_listener.start()
         
         # Wait until stopped
         try:
@@ -129,6 +137,7 @@ class RecordingSession:
                 platform=meta.platform
             )
             
+            self.last_screenshot = image_bytes
             self._display_status()
             
         except Exception as e:
@@ -144,6 +153,8 @@ class RecordingSession:
         self.is_recording = False
         
         self.hotkey_listener.stop()
+        if self.mouse_listener:
+            self.mouse_listener.stop()
         self._stop_event.set()
         
         self.console.print("\n[bold yellow]Recording stopped.[/bold yellow]")
@@ -180,6 +191,21 @@ class RecordingSession:
     def _on_stop_hotkey(self) -> None:
         """Callback for stop hotkey."""
         self.stop()
+    
+    def _on_mouse_click(self, x: int, y: int, pressed: bool) -> None:
+        """Callback for mouse click (trigger auto-capture)."""
+        if not self.is_recording or not pressed:
+            return
+            
+        # Optional: Filter out clicks in our own window to avoid loops
+        meta = self.metadata_collector.collect()
+        title = meta.window_title or ""
+        if "Streamlit" in title or "ShowOnce" in title:
+            return
+            
+        log.debug(f"Auto-capturing step on click at ({x}, {y})")
+        # Trigger capture in a way that doesn't block the mouse listener thread
+        self.request_capture()
     
     def _prompt_description(self) -> str:
         """Prompt user for step description."""

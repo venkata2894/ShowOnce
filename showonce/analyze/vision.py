@@ -92,7 +92,7 @@ class ClaudeVision:
             user_description: User's description of what they did
             
         Returns:
-            Structured analysis of the action performed (Action model fields)
+            Raw API response text from Claude
         """
         try:
             before_data = self._prepare_image(before_image)
@@ -153,15 +153,12 @@ class ClaudeVision:
             
             response_text = self._call_api(messages, system=system_prompt)
             
-            # Parse JSON from response
-            # Claude might wrap JSON in markdown blocks, so we clean it
-            cleaned_text = self._clean_json_block(response_text)
-            return json.loads(cleaned_text)
+            # Log raw response for debugging
+            log.debug(f"Raw API response: {response_text[:500]}...")
             
+            return response_text
         except Exception as e:
             log.error(f"Error analyzing transition: {e}")
-            # Return a fallback error dict rather than crashing flow?
-            # Or raise to let caller handle? raising is better for now.
             raise
 
     def _prepare_image(self, image: Union[bytes, str, Path]) -> Dict[str, str]:
@@ -170,35 +167,41 @@ class ClaudeVision:
         
         Returns dict with keys: 'media_type', 'data' (base64 string)
         """
-        media_type = "image/png" # Default, maybe detect later
-        b64_data = ""
-        
-        if isinstance(image, bytes):
-            b64_data = base64.b64encode(image).decode("utf-8")
-        elif isinstance(image, (str, Path)):
-            path = Path(image)
-            if path.exists():
-                # Detect type from extension
-                suffix = path.suffix.lower()
-                if suffix in ['.jpg', '.jpeg']:
-                    media_type = "image/jpeg"
-                elif suffix == '.webp':
-                    media_type = "image/webp"
-                
-                with open(path, "rb") as f:
-                    b64_data = base64.b64encode(f.read()).decode("utf-8")
-            else:
-                # Assume it's a base64 string if not a file
-                # Basic validation
-                if len(image) > 100: # Heuristic
-                    b64_data = str(image)
+        try:
+            media_type = "image/png" # Default, maybe detect later
+            b64_data = ""
+            
+            if isinstance(image, bytes):
+                b64_data = base64.b64encode(image).decode("utf-8")
+            elif isinstance(image, (str, Path)):
+                path = Path(image)
+                if path.exists():
+                    # Detect type from extension
+                    suffix = path.suffix.lower()
+                    if suffix in ['.jpg', '.jpeg']:
+                        media_type = "image/jpeg"
+                    elif suffix == '.webp':
+                        media_type = "image/webp"
+                    
+                    with open(path, "rb") as f:
+                        b64_data = base64.b64encode(f.read()).decode("utf-8")
                 else:
-                    raise FileNotFoundError(f"Image path not found: {image}")
-        
-        return {
-            "media_type": media_type,
-            "data": b64_data
-        }
+                    # Assume it's a base64 string if not a file
+                    # Basic validation
+                    if len(image) > 100: # Heuristic
+                        b64_data = str(image)
+                    else:
+                        raise FileNotFoundError(f"Image path not found: {image}")
+            else:
+                raise ValueError(f"Invalid image type: {type(image)}")
+            
+            return {
+                "media_type": media_type,
+                "data": b64_data
+            }
+        except Exception as e:
+            log.error(f"Error preparing image: {e}")
+            raise
     
     def _call_api(
         self, 
@@ -235,16 +238,6 @@ class ClaudeVision:
             log.error(f"Unexpected error calling Claude: {e}")
             raise
 
-    def _clean_json_block(self, text: str) -> str:
-        """Extract JSON from markdown code blocks if present."""
-        text = text.strip()
-        if text.startswith("```json"):
-            text = text[7:]
-        if text.startswith("```"):
-            text = text[3:]
-        if text.endswith("```"):
-            text = text[:-3]
-        return text.strip()
 
 
 def create_vision_client() -> ClaudeVision:

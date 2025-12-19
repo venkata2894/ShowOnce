@@ -68,6 +68,7 @@ Return JSON in this exact format:
     {{
       "sequence": 1,
       "type": "click|type|scroll|select|key_press|navigate|hover|wait",
+      "description": "Human-readable description of this specific action",
       "target": {{
         "description": "Human readable description of element",
         "selectors": [
@@ -92,11 +93,14 @@ Return JSON in this exact format:
 }}
 
 IMPORTANT:
-- Focus on what CHANGED between the screenshots
-- If typing, capture the exact text that appeared
-- Mark sensitive data (passwords, emails) as is_variable=true
-- Provide multiple selector strategies when possible
-- Visual descriptions should help identify the element even if selectors fail
+- ALWAYS include the "description" field for each action.
+- Return ONLY valid JSON.
+- DO NOT include any text before or after the JSON object.
+- DO NOT use markdown code blocks (```json ... ```).
+- Focus on what CHANGED between the screenshots.
+- If typing, capture the exact text that appeared.
+- Mark sensitive data (passwords, emails) as is_variable=true.
+- Provide multiple selector strategies when possible.
 '''
 
 # =============================================================================
@@ -260,39 +264,52 @@ def build_workflow_prompt(
     )
 
 
-def parse_analysis_response(response: str) -> Dict[str, Any]:
+def parse_api_response(response_text: str) -> Dict[str, Any]:
     """
-    Parse Claude's JSON response safely.
+    Safely parse JSON from Claude's response.
+    Handles: empty responses, markdown blocks, text before/after JSON.
     
     Args:
-        response: Raw response string from Claude
+        response_text: Raw response string from Claude
         
     Returns:
-        Parsed dictionary, or error dict if parsing fails
+        Parsed dictionary. Returns {"actions": []} on any failure.
     """
-    # Clean the response
-    text = response.strip()
+    import re
+    import json
     
-    # Remove markdown code blocks if present
-    if text.startswith("```json"):
-        text = text[7:]
-    elif text.startswith("```"):
-        text = text[3:]
+    if not response_text or not response_text.strip():
+        return {"actions": [], "error": "Empty response"}
     
-    if text.endswith("```"):
-        text = text[:-3]
+    # 1. Strip markdown code blocks (```json ... ```)
+    cleaned = response_text.strip()
+    cleaned = re.sub(r'^```json\s*', '', cleaned)
+    cleaned = re.sub(r'^```\s*', '', cleaned)
+    cleaned = re.sub(r'\s*```$', '', cleaned)
     
-    text = text.strip()
+    # 2. Use regex to find the actual JSON object {...}
+    # This is more robust than just stripping markers
+    json_match = re.search(r'\{[\s\S]*\}', cleaned)
     
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as e:
-        # Return error structure
-        return {
-            "error": "Failed to parse JSON response",
-            "parse_error": str(e),
-            "raw_response": response[:500]  # First 500 chars for debugging
-        }
+    if json_match:
+        try:
+            return json.loads(json_match.group())
+        except json.JSONDecodeError as e:
+            # Fallback: maybe it's just partially JSON?
+            # Or if it's already a dict (rare if coming from API as string)
+            pass
+            
+    # 3. Final fallback: Return empty actions
+    return {
+        "actions": [],
+        "error": "Could not find valid JSON in response",
+        "raw_response": response_text[:500]
+    }
+
+
+def parse_analysis_response(response: str) -> Dict[str, Any]:
+    """Alias for parse_api_response for backward compatibility."""
+    return parse_api_response(response)
 
 
 def get_system_prompt(detail_level: str = "standard") -> str:
